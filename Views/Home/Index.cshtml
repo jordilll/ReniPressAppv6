@@ -1,0 +1,283 @@
+@model List<ReniPressApp.Models.Establecimiento>
+@{
+    ViewData["Title"] = "RENIPRESS - Registro Nacional de IPRESS";
+    ViewData["Modulo"] = "RENIPRESS";
+    var departamentos = ViewBag.Departamentos as List<string> ?? new List<string>();
+    var provincias    = ViewBag.Provincias    as List<string> ?? new List<string>();
+    var distritos     = ViewBag.Distritos     as List<string> ?? new List<string>();
+    string depSel     = ViewBag.DepSeleccionado  ?? "";
+    string provSel    = ViewBag.ProvSeleccionada ?? "";
+    string distSel    = ViewBag.DistSeleccionado ?? "";
+    string nomBuscado = ViewBag.NombreBuscado    ?? "";
+    int?   total      = ViewBag.TotalResultados  as int?;
+}
+
+@section Styles {
+<style>
+    .cod-badge {
+        background: #E8F0FB;
+        color: var(--azul-medio);
+        font-size: .75rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-family: monospace;
+        letter-spacing: .3px;
+    }
+    .clasif-badge {
+        background: #FFF3E0;
+        color: #B26000;
+        font-size: .73rem;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 6px;
+        white-space: nowrap;
+    }
+    .nombre-ipress { font-weight: 600; color: var(--azul-oscuro); }
+    .ubicacion-text { font-size: .8rem; color: var(--texto-sec); }
+    .ubicacion-icon { color: var(--naranja); margin-right: 4px; font-size: .78rem; }
+    .results-section { margin-top: 36px; }
+    .results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .results-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--azul-oscuro);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .badge-total {
+        background: var(--azul-medio);
+        color: #fff;
+        font-size: .75rem;
+        font-weight: 700;
+        padding: 3px 11px;
+        border-radius: 100px;
+    }
+</style>
+}
+
+<div class="hero">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <div class="hero-badge">
+                    <i class="bi bi-hospital"></i>
+                    Registro Nacional de IPRESS
+                </div>
+                <h1>Encuentra <span>Establecimientos</span><br/>de Salud en el Perú</h1>
+                <p>Consulta el registro oficial de Instituciones Prestadoras de Servicios de Salud (IPRESS) a nivel nacional.</p>
+                <div class="hero-stats">
+                    <div>
+                        <div class="hero-stat-val">IPRESS</div>
+                        <div class="hero-stat-lbl">Registradas</div>
+                    </div>
+                    <div class="hero-divider"></div>
+                    <div>
+                        <div class="hero-stat-val">25</div>
+                        <div class="hero-stat-lbl">Departamentos</div>
+                    </div>
+                    <div class="hero-divider"></div>
+                    <div>
+                        <div class="hero-stat-val">MINSA</div>
+                        <div class="hero-stat-lbl">EsSalud · FFAA</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 d-none d-lg-flex justify-content-end">
+                <i class="bi bi-hospital-fill" style="font-size:9rem; color:rgba(255,255,255,.08);"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container pb-5">
+
+    <div class="search-card">
+        <div class="search-card-title">
+            <i class="bi bi-search"></i> Parámetros de búsqueda
+        </div>
+
+        <form method="post" action="@Url.Action("Buscar", "Home")" id="formBusqueda">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label">Nombre o Código IPRESS</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="border:1.5px solid var(--gris-borde); background:#F8FAFC; border-right:0; border-radius:8px 0 0 8px;">
+                            <i class="bi bi-building" style="color:var(--azul-claro);"></i>
+                        </span>
+                        <input type="text" name="nombre" id="nombre" class="form-control"
+                               style="border-left:0; border-radius:0 8px 8px 0;"
+                               placeholder="Ej: Hospital Nacional Cayetano"
+                               value="@nomBuscado" />
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-3">
+                    <label class="form-label">Departamento</label>
+                    <select name="departamento" id="departamento" class="form-select" onchange="cargarProvincias(this.value)">
+                        <option value="">— Todos —</option>
+                        @foreach (var dep in departamentos)
+                        {
+                            <option value="@dep" selected="@(dep == depSel ? "selected" : null)">@dep</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-lg-2">
+                    <label class="form-label">Provincia</label>
+                    <select name="provincia" id="provincia" class="form-select" onchange="cargarDistritos(document.getElementById('departamento').value, this.value)">
+                        <option value="">— Todas —</option>
+                        @foreach (var prov in provincias)
+                        {
+                            <option value="@prov" selected="@(prov == provSel ? "selected" : null)">@prov</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-lg-2">
+                    <label class="form-label">Distrito</label>
+                    <select name="distrito" id="distrito" class="form-select">
+                        <option value="">— Todos —</option>
+                        @foreach (var dist in distritos)
+                        {
+                            <option value="@dist" selected="@(dist == distSel ? "selected" : null)">@dist</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12 col-lg-1 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-buscar w-100">
+                        <i class="bi bi-search me-1"></i>Buscar
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex justify-content-end">
+                <a href="@Url.Action("Index", "Home")" class="btn btn-limpiar">
+                    <i class="bi bi-x-circle me-1"></i>Limpiar filtros
+                </a>
+            </div>
+        </form>
+    </div>
+
+    @if (ViewBag.Error != null)
+    {
+        <div class="alert-custom mt-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@ViewBag.Error
+        </div>
+    }
+
+    @if (total.HasValue)
+    {
+        <div class="results-section">
+            <div class="results-header">
+                <div class="results-title">
+                    <i class="bi bi-table" style="color:var(--azul-claro);"></i>
+                    Resultados de búsqueda
+                    <span class="badge-total">@total establecimientos</span>
+                </div>
+                <small class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Datos del Registro Nacional IPRESS
+                </small>
+            </div>
+
+            @if (Model != null && Model.Count > 0)
+            {
+                <div class="table-wrapper">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Código IPRESS</th>
+                                    <th>Nombre del Establecimiento</th>
+                                    <th>Institución</th>
+                                    <th>Clasificación</th>
+                                    <th>Ubicación</th>
+                                    <th>UBIGEO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ int fila = 1; }
+                                @foreach (var est in Model)
+                                {
+                                    <tr>
+                                        <td style="color:var(--texto-sec); font-size:.8rem;">@fila</td>
+                                        <td><span class="cod-badge">@est.COD_IPRESS</span></td>
+                                        <td><div class="nombre-ipress">@est.NOMBRE</div></td>
+                                        <td style="font-size:.82rem; color:var(--texto-sec);">@est.INSTITUCION</td>
+                                        <td><span class="clasif-badge">@est.CLASIFICACION</span></td>
+                                        <td>
+                                            <div class="ubicacion-text">
+                                                <i class="bi bi-geo-alt-fill ubicacion-icon"></i>@est.DISTRITO
+                                            </div>
+                                            <div class="ubicacion-text">@est.PROVINCIA · @est.DEPARTAMENTO</div>
+                                        </td>
+                                        <td style="font-size:.8rem; color:var(--texto-sec); font-family:monospace;">@est.UBIGEO</td>
+                                    </tr>
+                                    fila++;
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <i class="bi bi-search"></i>
+                    <h5>No se encontraron resultados</h5>
+                    <p>Intente con otros criterios de búsqueda o amplíe los filtros aplicados.</p>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty-state mt-4">
+            <i class="bi bi-hospital"></i>
+            <h5>Ingrese criterios de búsqueda</h5>
+            <p>Use el formulario para buscar establecimientos de salud registrados a nivel nacional.</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+    async function cargarProvincias(departamento) {
+        const selProv = document.getElementById('provincia');
+        const selDist = document.getElementById('distrito');
+        selProv.innerHTML = '<option value="">— Cargando... —</option>';
+        selDist.innerHTML = '<option value="">— Todas —</option>';
+        if (!departamento) { selProv.innerHTML = '<option value="">— Todas —</option>'; return; }
+        try {
+            const res = await fetch(`/Home/ObtenerProvinciasPorDep?departamento=${encodeURIComponent(departamento)}`);
+            const data = await res.json();
+            selProv.innerHTML = '<option value="">— Todas —</option>';
+            data.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; selProv.appendChild(o); });
+        } catch { selProv.innerHTML = '<option value="">— Error al cargar —</option>'; }
+    }
+
+    async function cargarDistritos(departamento, provincia) {
+        const selDist = document.getElementById('distrito');
+        selDist.innerHTML = '<option value="">— Cargando... —</option>';
+        if (!provincia) { selDist.innerHTML = '<option value="">— Todos —</option>'; return; }
+        try {
+            const res = await fetch(`/Home/ObtenerDistritosPorProv?departamento=${encodeURIComponent(departamento)}&provincia=${encodeURIComponent(provincia)}`);
+            const data = await res.json();
+            selDist.innerHTML = '<option value="">— Todos —</option>';
+            data.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; selDist.appendChild(o); });
+        } catch { selDist.innerHTML = '<option value="">— Error al cargar —</option>'; }
+    }
+</script>
+}

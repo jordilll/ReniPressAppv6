@@ -1,0 +1,409 @@
+@{
+    ViewData["Title"] = "Estadísticas IRA - Infecciones Respiratorias Agudas";
+    ViewData["Modulo"] = "IRA";
+}
+
+@section Styles {
+<style>
+    .kpi-card {
+        background: #fff;
+        border-radius: 14px;
+        padding: 24px 28px;
+        box-shadow: 0 4px 20px rgba(0,58,112,.09);
+        border: 1px solid var(--gris-borde);
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        transition: transform .2s, box-shadow .2s;
+    }
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,58,112,.14);
+    }
+    .kpi-icon {
+        width: 54px;
+        height: 54px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+    .kpi-icon.azul   { background: #E8F0FB; color: var(--azul-medio); }
+    .kpi-icon.verde  { background: #E6F7EF; color: #1A7D45; }
+    .kpi-icon.naranja { background: #FFF3E0; color: #B26000; }
+    .kpi-val {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--azul-oscuro);
+        line-height: 1;
+        margin-bottom: 4px;
+    }
+    .kpi-lbl {
+        font-size: .78rem;
+        color: var(--texto-sec);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    .chart-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0,58,112,.09);
+        border: 1px solid var(--gris-borde);
+        padding: 28px 32px;
+        margin-top: 28px;
+    }
+    .chart-card-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--azul-oscuro);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .chart-card-title i { color: var(--naranja); }
+
+    .pct-badge {
+        background: #E8F0FB;
+        color: var(--azul-medio);
+        font-size: .75rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 6px;
+    }
+    .casos-num {
+        font-weight: 700;
+        color: var(--azul-oscuro);
+    }
+    .dep-name { font-weight: 600; color: var(--texto-prin); }
+    .rank-badge {
+        background: var(--azul-oscuro);
+        color: #fff;
+        font-size: .72rem;
+        font-weight: 700;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .spinner-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,.7);
+        border-radius: 14px;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+    }
+    .spinner-overlay.visible { display: flex; }
+    .chart-wrap { position: relative; }
+</style>
+}
+
+<div class="hero">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <div class="hero-badge">
+                    <i class="bi bi-activity"></i>
+                    Vigilancia Epidemiológica
+                </div>
+                <h1>Estadísticas de <span>IRA</span><br/>por Departamento</h1>
+                <p>Infecciones Respiratorias Agudas — Distribución nacional de casos registrados por el sistema de vigilancia epidemiológica del Perú.</p>
+                <div class="hero-stats" id="heroStats">
+                    <div>
+                        <div class="hero-stat-val" id="heroTotal">—</div>
+                        <div class="hero-stat-lbl">Casos registrados</div>
+                    </div>
+                    <div class="hero-divider"></div>
+                    <div>
+                        <div class="hero-stat-val" id="heroDeps">—</div>
+                        <div class="hero-stat-lbl">Departamentos</div>
+                    </div>
+                    <div class="hero-divider"></div>
+                    <div>
+                        <div class="hero-stat-val" id="heroAnio">—</div>
+                        <div class="hero-stat-lbl">Año consultado</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 d-none d-lg-flex justify-content-end">
+                <i class="bi bi-lungs" style="font-size:9rem; color:rgba(255,255,255,.08);"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container pb-5">
+
+    <div class="search-card">
+        <div class="search-card-title">
+            <i class="bi bi-funnel"></i> Parámetros de consulta
+        </div>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label">Año</label>
+                <select id="selectAnio" class="form-select">
+                    @for (int a = DateTime.Now.Year; a >= 2015; a--)
+                    {
+                        <option value="@a" selected="@(a == DateTime.Now.Year - 1 ? "selected" : null)">@a</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-buscar" onclick="buscarDatos()">
+                    <i class="bi bi-search me-1"></i>Buscar
+                </button>
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-limpiar" onclick="limpiar()">
+                    <i class="bi bi-x-circle me-1"></i>Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertaError" class="alert-custom mt-4" style="display:none;">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><span id="alertaMsg"></span>
+    </div>
+
+    <div id="seccionDatos" style="display:none;">
+
+        <div class="row g-3 mt-2">
+            <div class="col-md-4">
+                <div class="kpi-card">
+                    <div class="kpi-icon azul"><i class="bi bi-clipboard2-pulse"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiTotal">0</div>
+                        <div class="kpi-lbl">Casos Totales</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card">
+                    <div class="kpi-icon verde"><i class="bi bi-map"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiDeps">0</div>
+                        <div class="kpi-lbl">Departamentos</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card">
+                    <div class="kpi-icon naranja"><i class="bi bi-trophy"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiTop" style="font-size:1.1rem; line-height:1.3;">—</div>
+                        <div class="kpi-lbl">Mayor cantidad de casos</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-card chart-wrap">
+            <div class="spinner-overlay" id="spinnerChart">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div class="chart-card-title">
+                <i class="bi bi-bar-chart-line"></i>
+                Distribución de Casos IRA por Departamento
+            </div>
+            <canvas id="iraChart" style="max-height:420px;"></canvas>
+        </div>
+
+        <div class="chart-card mt-4">
+            <div class="chart-card-title">
+                <i class="bi bi-table"></i>
+                Detalle por Departamento
+            </div>
+            <div class="table-wrapper">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaIra">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Departamento</th>
+                                <th>Casos</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="estadoInicial" class="empty-state mt-4">
+        <i class="bi bi-bar-chart"></i>
+        <h5>Seleccione un año para consultar</h5>
+        <p>Elija el año de interés y presione Buscar para visualizar los datos de IRA por departamento.</p>
+    </div>
+
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+    let iraChartInstance = null;
+
+    const COLORES = [
+        '#003A70','#0057A8','#0079C2','#1A9BDB','#38B6F0',
+        '#F7941D','#D97B0A','#FBBF54','#E6495A','#C0392B',
+        '#1A7D45','#27AE60','#7B5EA7','#9B59B6','#2C3E50',
+        '#16A085','#8E44AD','#2980B9','#E74C3C','#F39C12',
+        '#1ABC9C','#34495E','#E67E22','#3498DB','#2ECC71'
+    ];
+
+    async function buscarDatos() {
+        const anio = document.getElementById('selectAnio').value;
+        document.getElementById('alertaError').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'none';
+        document.getElementById('spinnerChart').classList.add('visible');
+
+        try {
+            const res = await fetch(`/Ira/ObtenerCasosPorDepartamento?anio=${anio}`);
+            const data = await res.json();
+
+            if (data.error) { mostrarError(data.error); return; }
+            if (!Array.isArray(data) || data.length === 0) {
+                mostrarError(`No se encontraron datos para el año ${anio}.`);
+                return;
+            }
+
+            renderizarDatos(data, parseInt(anio));
+
+        } catch (e) {
+            mostrarError('Error de conexión al servidor: ' + e.message);
+        } finally {
+            document.getElementById('spinnerChart').classList.remove('visible');
+        }
+    }
+
+    function renderizarDatos(data, anio) {
+        const totalCasos = data.reduce((s, d) => s + d.totalCasos, 0);
+        const numDeps    = data.length;
+        const top        = data[0];
+
+        document.getElementById('heroTotal').textContent = totalCasos.toLocaleString('es-PE');
+        document.getElementById('heroDeps').textContent  = numDeps;
+        document.getElementById('heroAnio').textContent  = anio;
+
+        document.getElementById('kpiTotal').textContent = totalCasos.toLocaleString('es-PE');
+        document.getElementById('kpiDeps').textContent  = numDeps;
+        document.getElementById('kpiTop').textContent   = top ? top.departamento : '—';
+
+        document.getElementById('seccionDatos').style.display = 'block';
+        document.getElementById('estadoInicial').style.display = 'none';
+
+        renderizarGrafico(data);
+        renderizarTabla(data);
+    }
+
+    function renderizarGrafico(data) {
+        if (iraChartInstance) {
+            iraChartInstance.destroy();
+            iraChartInstance = null;
+        }
+
+        const labels   = data.map(d => d.departamento);
+        const valores  = data.map(d => d.totalCasos);
+        const colores  = data.map((_, i) => COLORES[i % COLORES.length]);
+
+        const ctx = document.getElementById('iraChart').getContext('2d');
+
+        iraChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Casos IRA',
+                    data: valores,
+                    backgroundColor: colores.map(c => c + 'CC'),
+                    borderColor: colores,
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: { duration: 700, easing: 'easeInOutQuart' },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const idx = ctx.dataIndex;
+                                return [
+                                    ` Casos: ${ctx.parsed.y.toLocaleString('es-PE')}`,
+                                    ` Porcentaje: ${data[idx].porcentaje}%`
+                                ];
+                            }
+                        },
+                        backgroundColor: '#003A70',
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 8
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11 }, color: '#5A6E82', maxRotation: 45 }
+                    },
+                    y: {
+                        grid: { color: '#ECF0F7' },
+                        ticks: {
+                            font: { size: 11 },
+                            color: '#5A6E82',
+                            callback: v => v.toLocaleString('es-PE')
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderizarTabla(data) {
+        const tbody = document.getElementById('tablaBody');
+        tbody.innerHTML = '';
+        data.forEach((d, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><span class="rank-badge">${i + 1}</span></td>
+                <td><span class="dep-name">${d.departamento}</span></td>
+                <td><span class="casos-num">${d.totalCasos.toLocaleString('es-PE')}</span></td>
+                <td><span class="pct-badge">${d.porcentaje}%</span></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function mostrarError(msg) {
+        document.getElementById('alertaMsg').textContent = msg;
+        document.getElementById('alertaError').style.display = 'block';
+        document.getElementById('seccionDatos').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'none';
+    }
+
+    function limpiar() {
+        document.getElementById('selectAnio').value = new Date().getFullYear() - 1;
+        document.getElementById('alertaError').style.display = 'none';
+        document.getElementById('seccionDatos').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'block';
+        document.getElementById('heroTotal').textContent = '—';
+        document.getElementById('heroDeps').textContent  = '—';
+        document.getElementById('heroAnio').textContent  = '—';
+        if (iraChartInstance) { iraChartInstance.destroy(); iraChartInstance = null; }
+    }
+</script>
+}

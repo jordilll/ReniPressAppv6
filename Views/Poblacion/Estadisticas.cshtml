@@ -1,0 +1,922 @@
+@{
+    ViewData["Title"] = "Análisis Epidemiológico IRA por Departamento";
+    ViewData["Modulo"] = "POBLACION";
+}
+
+@section Styles {
+<style>
+    .kpi-card {
+        background: #fff;
+        border-radius: 14px;
+        padding: 22px 24px;
+        box-shadow: 0 4px 20px rgba(0,58,112,.09);
+        border: 1px solid var(--gris-borde);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        transition: transform .2s, box-shadow .2s;
+        height: 100%;
+    }
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,58,112,.14);
+    }
+    .kpi-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        flex-shrink: 0;
+    }
+    .kpi-icon.azul    { background: #E8F0FB; color: var(--azul-medio); }
+    .kpi-icon.verde   { background: #E6F7EF; color: #1A7D45; }
+    .kpi-icon.naranja { background: #FFF3E0; color: #B26000; }
+    .kpi-icon.morado  { background: #F1E9FB; color: #7B5EA7; }
+    .kpi-icon.rojo    { background: #FDEAEA; color: #C0392B; }
+    .kpi-val {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--azul-oscuro);
+        line-height: 1.15;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .kpi-sub {
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--texto-sec);
+        margin-bottom: 4px;
+    }
+    .kpi-lbl {
+        font-size: .74rem;
+        color: var(--texto-sec);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    .chart-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0,58,112,.09);
+        border: 1px solid var(--gris-borde);
+        padding: 28px 32px;
+        margin-top: 28px;
+    }
+    .chart-card-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--azul-oscuro);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .chart-card-title i { color: var(--naranja); }
+    .chart-card-subtitle {
+        font-size: .8rem;
+        color: var(--texto-sec);
+        margin-top: -14px;
+        margin-bottom: 18px;
+    }
+
+    .pct-badge {
+        background: #E8F0FB;
+        color: var(--azul-medio);
+        font-size: .75rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 6px;
+    }
+    .casos-num {
+        font-weight: 700;
+        color: var(--azul-oscuro);
+    }
+    .dep-name { font-weight: 600; color: var(--texto-prin); }
+    .rank-badge {
+        background: var(--azul-oscuro);
+        color: #fff;
+        font-size: .72rem;
+        font-weight: 700;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Badges de Nivel de Riesgo */
+    .nivel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: .74rem;
+        font-weight: 700;
+        padding: 4px 11px;
+        border-radius: 100px;
+        white-space: nowrap;
+    }
+    .nivel-badge.muy-alto { background: #FDEAEA; color: #C0392B; }
+    .nivel-badge.alto     { background: #FFF3E0; color: #B26000; }
+    .nivel-badge.medio    { background: #FFF9DB; color: #8A6D00; }
+    .nivel-badge.bajo     { background: #E6F7EF; color: #1A7D45; }
+
+    /* Resaltado de fila max/min en la tabla (mayor y menor riesgo) */
+    tr.fila-max { background: #FDEAEA !important; }
+    tr.fila-max:hover { background: #FBE1E1 !important; }
+    tr.fila-max .rank-badge { background: #C0392B; }
+    tr.fila-min { background: #E9F9EF !important; }
+    tr.fila-min:hover { background: #DDF4E6 !important; }
+    tr.fila-min .rank-badge { background: #1A7D45; }
+
+    .spinner-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,.7);
+        border-radius: 14px;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+    }
+    .spinner-overlay.visible { display: flex; }
+    .chart-wrap { position: relative; }
+
+    /* Contenedor con scroll para el gráfico de barras horizontal (25 departamentos) */
+    .bar-chart-scroll {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    /* ===== Mapa de riesgo (tile-grid) del Perú por departamento ===== */
+    .peru-heatmap-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .peru-heatmap {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+        width: 100%;
+        max-width: 330px;
+        margin: 0 auto;
+    }
+    .heatmap-cell {
+        position: relative;
+        aspect-ratio: 1 / 1;
+        border-radius: 9px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        cursor: default;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+        transition: transform .15s, box-shadow .15s;
+    }
+    .heatmap-cell:hover {
+        transform: scale(1.12);
+        z-index: 3;
+        box-shadow: 0 6px 18px rgba(0,0,0,.30), inset 0 0 0 1.5px #fff;
+    }
+    .heatmap-cell .hm-codigo {
+        font-size: .62rem;
+        font-weight: 800;
+        letter-spacing: .3px;
+        text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    }
+    .heatmap-empty { visibility: hidden; }
+
+    .heatmap-tooltip {
+        position: fixed;
+        pointer-events: none;
+        background: #003A70;
+        color: #fff;
+        font-size: .78rem;
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.25);
+        z-index: 9999;
+        display: none;
+        max-width: 240px;
+        line-height: 1.5;
+    }
+    .heatmap-tooltip strong { display: block; font-size: .84rem; margin-bottom: 2px; }
+
+    .heatmap-legend {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        max-width: 330px;
+        margin-top: 20px;
+    }
+    .heatmap-legend-bar {
+        flex: 1;
+        height: 12px;
+        border-radius: 6px;
+        background: linear-gradient(90deg, #1A7D45 0%, #F4B400 45%, #F7941D 70%, #C0392B 100%);
+    }
+    .heatmap-legend-lbl {
+        font-size: .68rem;
+        color: var(--texto-sec);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* ===== Asistente IA ===== */
+    .ia-card {
+        background: linear-gradient(135deg, #003A70 0%, #0057A8 100%);
+        border-radius: 14px;
+        padding: 26px 30px;
+        margin-top: 28px;
+        color: #fff;
+    }
+    .ia-card-title {
+        font-size: 1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+    .ia-card-title i { color: #FFC872; }
+    .ia-card-sub { font-size: .84rem; color: rgba(255,255,255,.75); margin-bottom: 18px; }
+    .ia-chip {
+        background: rgba(255,255,255,.12);
+        border: 1px solid rgba(255,255,255,.25);
+        color: #fff;
+        font-size: .78rem;
+        padding: 6px 13px;
+        border-radius: 100px;
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .ia-chip:hover { background: rgba(255,255,255,.22); }
+    .ia-input-row { display: flex; gap: 10px; margin-top: 16px; }
+    .ia-input {
+        flex: 1;
+        border-radius: 8px;
+        border: none;
+        padding: 11px 14px;
+        font-size: .9rem;
+    }
+    .ia-btn {
+        background: var(--naranja);
+        color: #fff;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+        padding: 0 22px;
+        font-size: .9rem;
+    }
+    .ia-btn:hover { background: var(--naranja-osc); }
+    .ia-respuesta {
+        background: rgba(255,255,255,.1);
+        border: 1px solid rgba(255,255,255,.2);
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-top: 16px;
+        font-size: .88rem;
+        line-height: 1.55;
+        display: none;
+    }
+    .ia-respuesta.visible { display: block; }
+</style>
+}
+
+<div class="hero">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <div class="hero-badge">
+                    <i class="bi bi-shield-plus"></i>
+                    Análisis Epidemiológico
+                </div>
+                <h1>Riesgo Epidemiológico de <span>IRA</span><br/>por Departamento</h1>
+                <p>La población deja de ser solo un dato demográfico: aquí se usa como base para calcular la tasa de incidencia de Infecciones Respiratorias Agudas y el nivel de riesgo real de cada departamento.</p>
+            </div>
+            <div class="col-lg-5 d-none d-lg-flex justify-content-end">
+                <i class="bi bi-lungs" style="font-size:9rem; color:rgba(255,255,255,.08);"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container pb-5">
+
+    <div class="search-card">
+        <div class="search-card-title">
+            <i class="bi bi-funnel"></i> Parámetros de consulta
+        </div>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label">Año</label>
+                <select id="selectAnio" class="form-select">
+                    @for (int a = 2024; a >= 2014; a--)
+                    {
+                        <option value="@a" selected="@(a == 2024 ? "selected" : null)">@a</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-buscar" onclick="buscarDatos()">
+                    <i class="bi bi-search me-1"></i>Buscar
+                </button>
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-limpiar" onclick="limpiar()">
+                    <i class="bi bi-x-circle me-1"></i>Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertaError" class="alert-custom mt-4" style="display:none;">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><span id="alertaMsg"></span>
+    </div>
+
+    <div id="seccionDatos" style="display:none;">
+
+        <div class="row g-3 mt-2">
+            <div class="col-md-6 col-xl">
+                <div class="kpi-card">
+                    <div class="kpi-icon azul"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiTasaNacional">0</div>
+                        <div class="kpi-lbl">Casos por cada 100 000 habitantes (Tasa Nacional)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl">
+                <div class="kpi-card">
+                    <div class="kpi-icon rojo"><i class="bi bi-exclamation-octagon"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiMayorRiesgo" title="">—</div>
+                        <div class="kpi-sub"><span id="kpiMayorRiesgoTasa">0</span> casos por cada 100 000 hab.</div>
+                        <div class="kpi-lbl">Departamento con Mayor Riesgo</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl">
+                <div class="kpi-card">
+                    <div class="kpi-icon verde"><i class="bi bi-shield-check"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiMenorRiesgo" title="">—</div>
+                        <div class="kpi-sub"><span id="kpiMenorRiesgoTasa">0</span> casos por cada 100 000 hab.</div>
+                        <div class="kpi-lbl">Departamento con Menor Riesgo</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl">
+                <div class="kpi-card">
+                    <div class="kpi-icon naranja"><i class="bi bi-clipboard2-pulse"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiTotalCasos">0</div>
+                        <div class="kpi-lbl">Casos IRA Totales</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl">
+                <div class="kpi-card">
+                    <div class="kpi-icon morado"><i class="bi bi-people"></i></div>
+                    <div>
+                        <div class="kpi-val" id="kpiTotalPoblacion">0</div>
+                        <div class="kpi-lbl">Población Analizada</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-card chart-wrap">
+            <div class="spinner-overlay" id="spinnerChartBar">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div class="chart-card-title">
+                <i class="bi bi-bar-chart-line"></i>
+                Tasa de Incidencia por Departamento (por 100 000 habitantes)
+            </div>
+            <div class="chart-card-subtitle">Ordenado de mayor a menor riesgo. El color de cada barra corresponde a su nivel de riesgo.</div>
+            <div class="bar-chart-scroll">
+                <canvas id="tasaChartBar"></canvas>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="chart-card chart-wrap h-100">
+                    <div class="spinner-overlay" id="spinnerChartPie">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                    <div class="chart-card-title">
+                        <i class="bi bi-pie-chart"></i>
+                        Distribución de Casos respecto a la Población
+                    </div>
+                    <div class="chart-card-subtitle">Cada porción representa el peso de la tasa de incidencia de ese departamento sobre el total nacional.</div>
+                    <canvas id="tasaChartPie" style="max-height:460px;"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="chart-card h-100">
+                    <div class="chart-card-title">
+                        <i class="bi bi-geo-alt"></i>
+                        Mapa de Riesgo — IRA por Región
+                    </div>
+                    <div class="chart-card-subtitle">Cuanto más intenso el color (verde → amarillo → naranja → rojo), mayor es el riesgo epidemiológico.</div>
+                    <div class="peru-heatmap-wrap">
+                        <div class="peru-heatmap" id="peruHeatmap"></div>
+                        <div class="heatmap-legend">
+                            <span class="heatmap-legend-lbl">Bajo</span>
+                            <div class="heatmap-legend-bar"></div>
+                            <span class="heatmap-legend-lbl">Muy Alto</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-card mt-4">
+            <div class="chart-card-title">
+                <i class="bi bi-table"></i>
+                Ranking de Riesgo Epidemiológico por Departamento
+            </div>
+            <div class="chart-card-subtitle">Ordenado por tasa de incidencia (mayor a menor riesgo), no por cantidad de casos.</div>
+            <div class="table-wrapper">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaAnalisis">
+                        <thead>
+                            <tr>
+                                <th>Posición</th>
+                                <th>Departamento</th>
+                                <th>Casos IRA</th>
+                                <th>Población</th>
+                                <th>Tasa x100 000 hab.</th>
+                                <th>Nivel</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="ia-card">
+            <div class="ia-card-title"><i class="bi bi-robot"></i> Asistente de Análisis Epidemiológico</div>
+            <div class="ia-card-sub">Pregunta sobre el riesgo de IRA usando la información combinada de población y casos.</div>
+            <div class="d-flex flex-wrap gap-2">
+                <span class="ia-chip" onclick="preguntarChip('¿Qué departamento presenta mayor riesgo de IRA considerando su población?')">Mayor riesgo</span>
+                <span class="ia-chip" onclick="preguntarChip('¿Cuál tiene la mayor tasa por cada 100 mil habitantes?')">Mayor tasa</span>
+                <span class="ia-chip" onclick="preguntarChip('¿Qué departamentos presentan riesgo muy alto?')">Riesgo muy alto</span>
+                <span class="ia-chip" onclick="preguntarChip('¿Qué departamento tiene muchos casos pero baja tasa?')">Muchos casos, baja tasa</span>
+            </div>
+            <div class="ia-input-row">
+                <input type="text" id="iaPregunta" class="ia-input" placeholder="Ej: Compara Lima y Loreto en riesgo de IRA">
+                <button class="ia-btn" onclick="preguntarIA()"><i class="bi bi-send me-1"></i>Preguntar</button>
+            </div>
+            <div class="ia-respuesta" id="iaRespuesta"></div>
+        </div>
+
+    </div>
+
+    <div id="estadoInicial" class="empty-state mt-4">
+        <i class="bi bi-bar-chart"></i>
+        <h5>Seleccione un año para consultar</h5>
+        <p>Elija el año de interés y presione Buscar para visualizar el análisis epidemiológico de IRA por departamento.</p>
+    </div>
+
+</div>
+
+<div class="heatmap-tooltip" id="heatmapTooltip"></div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+    let tasaChartBarInstance = null;
+    let tasaChartPieInstance = null;
+    let anioActual = 2024;
+
+    // Colores por nivel de riesgo (coherentes con los badges de la tabla).
+    const COLOR_NIVEL = {
+        'Muy Alto': '#C0392B',
+        'Alto':     '#F7941D',
+        'Medio':    '#F4B400',
+        'Bajo':     '#1A7D45'
+    };
+    const CLASE_NIVEL = {
+        'Muy Alto': 'muy-alto',
+        'Alto':     'alto',
+        'Medio':    'medio',
+        'Bajo':     'bajo'
+    };
+
+    // Posición (fila, columna) de cada departamento en el mapa tipo "tile-grid": conserva
+    // la disposición geográfica relativa del Perú sin depender de un archivo cartográfico externo.
+    const GRID_DEPARTAMENTOS = {
+        'TUMBES':          { fila: 0,  col: 0, codigo: 'TUM' },
+        'LORETO':          { fila: 0,  col: 3, codigo: 'LOR' },
+        'PIURA':           { fila: 1,  col: 0, codigo: 'PIU' },
+        'AMAZONAS':        { fila: 1,  col: 2, codigo: 'AMA' },
+        'LAMBAYEQUE':      { fila: 2,  col: 0, codigo: 'LAM' },
+        'CAJAMARCA':       { fila: 2,  col: 1, codigo: 'CAJ' },
+        'SAN MARTIN':      { fila: 2,  col: 3, codigo: 'SM'  },
+        'LA LIBERTAD':     { fila: 3,  col: 0, codigo: 'LAL' },
+        'HUANUCO':         { fila: 3,  col: 2, codigo: 'HUC' },
+        'UCAYALI':         { fila: 3,  col: 4, codigo: 'UCA' },
+        'ANCASH':          { fila: 4,  col: 0, codigo: 'ANC' },
+        'PASCO':           { fila: 4,  col: 2, codigo: 'PAS' },
+        'LIMA':            { fila: 5,  col: 0, codigo: 'LIM' },
+        'CALLAO':          { fila: 5,  col: 1, codigo: 'CAL' },
+        'JUNIN':           { fila: 5,  col: 2, codigo: 'JUN' },
+        'MADRE DE DIOS':   { fila: 5,  col: 4, codigo: 'MDD' },
+        'HUANCAVELICA':    { fila: 6,  col: 1, codigo: 'HCV' },
+        'CUSCO':           { fila: 6,  col: 3, codigo: 'CUS' },
+        'ICA':             { fila: 7,  col: 0, codigo: 'ICA' },
+        'AYACUCHO':        { fila: 7,  col: 1, codigo: 'AYA' },
+        'APURIMAC':        { fila: 7,  col: 2, codigo: 'APU' },
+        'PUNO':            { fila: 7,  col: 4, codigo: 'PUN' },
+        'AREQUIPA':        { fila: 8,  col: 1, codigo: 'AQP' },
+        'MOQUEGUA':        { fila: 9,  col: 1, codigo: 'MOQ' },
+        'TACNA':           { fila: 10, col: 1, codigo: 'TAC' }
+    };
+
+    // Normaliza texto: mayúsculas y sin tildes, para hacer match confiable
+    // entre el nombre que llega de la base de datos y las claves del grid.
+    function normalizar(txt) {
+        return (txt || '')
+            .toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toUpperCase();
+    }
+
+    // Formatea un número entero con separador de miles: 11,932,047
+    function fmt(n) {
+        return Math.round(n).toLocaleString('en-US');
+    }
+
+    function fmtTasa(n) {
+        return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function buscarDatos() {
+        const anio = document.getElementById('selectAnio').value;
+        anioActual = parseInt(anio);
+        document.getElementById('alertaError').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'none';
+        document.getElementById('spinnerChartBar').classList.add('visible');
+        document.getElementById('spinnerChartPie').classList.add('visible');
+        ocultarRespuestaIA();
+
+        try {
+            const res = await fetch(`/Poblacion/ObtenerAnalisisEpidemiologico?anio=${anio}`);
+            const data = await res.json();
+
+            if (data.error) { mostrarError(data.error); return; }
+            if (!data.detalle || !Array.isArray(data.detalle) || data.detalle.length === 0) {
+                mostrarError(`No se encontraron datos para el año ${anio}.`);
+                return;
+            }
+
+            renderizarDatos(data.detalle, data.resumen);
+
+        } catch (e) {
+            mostrarError('Error de conexión al servidor: ' + e.message);
+        } finally {
+            document.getElementById('spinnerChartBar').classList.remove('visible');
+            document.getElementById('spinnerChartPie').classList.remove('visible');
+        }
+    }
+
+    function renderizarDatos(detalle, resumen) {
+        // El backend ya ordena por tasa descendente (mayor a menor riesgo).
+        const ordenado = [...detalle].sort((a, b) => b.tasa - a.tasa);
+
+        document.getElementById('kpiTasaNacional').textContent = fmtTasa(resumen.tasaNacional);
+
+        document.getElementById('kpiMayorRiesgo').textContent      = resumen.departamentoMayorRiesgo;
+        document.getElementById('kpiMayorRiesgo').title            = resumen.departamentoMayorRiesgo;
+        document.getElementById('kpiMayorRiesgoTasa').textContent  = fmtTasa(resumen.tasaMayorRiesgo);
+
+        document.getElementById('kpiMenorRiesgo').textContent      = resumen.departamentoMenorRiesgo;
+        document.getElementById('kpiMenorRiesgo').title            = resumen.departamentoMenorRiesgo;
+        document.getElementById('kpiMenorRiesgoTasa').textContent  = fmtTasa(resumen.tasaMenorRiesgo);
+
+        document.getElementById('kpiTotalCasos').textContent      = fmt(resumen.totalCasos);
+        document.getElementById('kpiTotalPoblacion').textContent  = fmt(resumen.totalPoblacion);
+
+        document.getElementById('seccionDatos').style.display = 'block';
+        document.getElementById('estadoInicial').style.display = 'none';
+
+        renderizarGraficoBarras(ordenado);
+        renderizarGraficoPie(ordenado);
+        renderizarMapaRiesgo(ordenado);
+        renderizarTabla(ordenado);
+    }
+
+    function renderizarGraficoBarras(data) {
+        if (tasaChartBarInstance) {
+            tasaChartBarInstance.destroy();
+            tasaChartBarInstance = null;
+        }
+
+        // Se invierte el arreglo: Chart.js dibuja las barras horizontales
+        // de abajo hacia arriba, así el departamento de mayor riesgo queda arriba.
+        const invertido = [...data].reverse();
+        const labels  = invertido.map(d => d.departamento);
+        const valores = invertido.map(d => d.tasa);
+        const colores = invertido.map(d => COLOR_NIVEL[d.nivel] || '#0057A8');
+        const valorMax = Math.max(...valores, 1);
+
+        // Altura dinámica según la cantidad de departamentos, para que las
+        // etiquetas se mantengan legibles sin importar cuántos registros haya.
+        const alturaPx = Math.max(560, data.length * 34);
+        const canvas = document.getElementById('tasaChartBar');
+        canvas.parentElement.style.height = alturaPx + 'px';
+
+        const ctx = canvas.getContext('2d');
+
+        tasaChartBarInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Tasa x 100 000 hab.',
+                    data: valores,
+                    backgroundColor: colores.map(c => c + 'CC'),
+                    borderColor: colores,
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    borderSkipped: false,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.82
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { right: 70 } },
+                animation: { duration: 700, easing: 'easeInOutQuart' },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'right',
+                        clamp: true,
+                        clip: false,
+                        color: '#1A2B3C',
+                        font: { size: 11, weight: '700' },
+                        formatter: v => fmtTasa(v)
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const idx = ctx.dataIndex;
+                                const d = invertido[idx];
+                                return [
+                                    ` Tasa: ${fmtTasa(d.tasa)} x 100 000 hab.`,
+                                    ` Casos: ${fmt(d.casosIRA)}`,
+                                    ` Población: ${fmt(d.poblacion)}`,
+                                    ` Nivel: ${d.nivel}`
+                                ];
+                            }
+                        },
+                        backgroundColor: '#003A70',
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 8
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        suggestedMax: valorMax * 1.15,
+                        grid: { color: '#ECF0F7' },
+                        ticks: {
+                            font: { size: 11 },
+                            color: '#5A6E82',
+                            callback: v => fmtTasa(v)
+                        }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11.5, weight: '600' }, color: '#1A2B3C' }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderizarGraficoPie(data) {
+        if (tasaChartPieInstance) {
+            tasaChartPieInstance.destroy();
+            tasaChartPieInstance = null;
+        }
+
+        // Distribución de casos respecto a la población: cada porción se calcula
+        // a partir de la tasa (casos / población), no de la población ni de los casos crudos.
+        const sumaTasas = data.reduce((s, d) => s + d.tasa, 0) || 1;
+        const labels  = data.map(d => d.departamento);
+        const valores = data.map(d => d.tasa);
+        const porcentajes = data.map(d => (d.tasa * 100 / sumaTasas));
+        const colores = data.map(d => COLOR_NIVEL[d.nivel] || '#0057A8');
+
+        const ctx = document.getElementById('tasaChartPie').getContext('2d');
+
+        tasaChartPieInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: valores,
+                    backgroundColor: colores,
+                    borderColor: '#fff',
+                    borderWidth: 2,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                cutout: '62%',
+                animation: { duration: 700, easing: 'easeInOutQuart' },
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { font: { size: 10 }, color: '#5A6E82', boxWidth: 12, padding: 10 }
+                    },
+                    datalabels: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const idx = ctx.dataIndex;
+                                return ` ${data[idx].departamento}: ${porcentajes[idx].toFixed(2)}% (tasa ${fmtTasa(data[idx].tasa)})`;
+                            }
+                        },
+                        backgroundColor: '#003A70',
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+
+    // Interpola un color tipo "mapa de riesgo" (verde -> amarillo -> naranja -> rojo)
+    // según t en [0,1], donde 1 representa el departamento de mayor riesgo.
+    function colorRiesgo(t) {
+        const stops = [
+            [26, 125, 69],    // #1A7D45 - riesgo bajo
+            [244, 180, 0],    // #F4B400 - riesgo medio
+            [247, 148, 29],   // #F7941D - riesgo alto
+            [192, 57, 43]     // #C0392B - riesgo muy alto
+        ];
+        const segTotal = stops.length - 1;
+        const pos = Math.min(t, 1) * segTotal;
+        const seg = Math.min(Math.floor(pos), segTotal - 1);
+        const localT = pos - seg;
+        const a = stops[seg], b = stops[seg + 1];
+        const r = Math.round(a[0] + (b[0] - a[0]) * localT);
+        const g = Math.round(a[1] + (b[1] - a[1]) * localT);
+        const bl = Math.round(a[2] + (b[2] - a[2]) * localT);
+        return `rgb(${r},${g},${bl})`;
+    }
+
+    function renderizarMapaRiesgo(data) {
+        const contenedor = document.getElementById('peruHeatmap');
+        const tooltip = document.getElementById('heatmapTooltip');
+        contenedor.innerHTML = '';
+
+        const valores = data.map(d => d.tasa);
+        const min = Math.min(...valores);
+        const max = Math.max(...valores);
+
+        let maxFila = 0, maxCol = 0;
+        Object.values(GRID_DEPARTAMENTOS).forEach(p => {
+            if (p.fila > maxFila) maxFila = p.fila;
+            if (p.col > maxCol) maxCol = p.col;
+        });
+        contenedor.style.gridTemplateRows = `repeat(${maxFila + 1}, 1fr)`;
+
+        const celdas = {};
+        for (let f = 0; f <= maxFila; f++) {
+            for (let c = 0; c <= maxCol; c++) {
+                const div = document.createElement('div');
+                div.className = 'heatmap-cell heatmap-empty';
+                div.style.gridRow = f + 1;
+                div.style.gridColumn = c + 1;
+                contenedor.appendChild(div);
+                celdas[`${f}-${c}`] = div;
+            }
+        }
+
+        data.forEach(d => {
+            const clave = normalizar(d.departamento);
+            const pos = GRID_DEPARTAMENTOS[clave];
+            if (!pos) return;
+
+            const t = max === min ? 1 : (d.tasa - min) / (max - min);
+            const celda = celdas[`${pos.fila}-${pos.col}`];
+            celda.classList.remove('heatmap-empty');
+            celda.style.background = colorRiesgo(t);
+            celda.innerHTML = `<span class="hm-codigo">${pos.codigo}</span>`;
+
+            celda.addEventListener('mouseenter', () => {
+                tooltip.innerHTML = `<strong>${d.departamento}</strong>Tasa: ${fmtTasa(d.tasa)} x 100 000 hab.<br/>Casos: ${fmt(d.casosIRA)} · Nivel: ${d.nivel}`;
+                tooltip.style.display = 'block';
+            });
+            celda.addEventListener('mousemove', (ev) => {
+                tooltip.style.left = (ev.clientX + 16) + 'px';
+                tooltip.style.top  = (ev.clientY + 16) + 'px';
+            });
+            celda.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
+
+    function renderizarTabla(data) {
+        const tbody = document.getElementById('tablaBody');
+        tbody.innerHTML = '';
+        const ultimo = data.length - 1;
+
+        data.forEach((d, i) => {
+            const tr = document.createElement('tr');
+            if (i === 0) tr.classList.add('fila-max');
+            else if (i === ultimo) tr.classList.add('fila-min');
+
+            const claseNivel = CLASE_NIVEL[d.nivel] || 'bajo';
+
+            tr.innerHTML = `
+                <td><span class="rank-badge">${d.posicion}</span></td>
+                <td><span class="dep-name">${d.departamento}</span></td>
+                <td><span class="casos-num">${fmt(d.casosIRA)}</span></td>
+                <td>${fmt(d.poblacion)}</td>
+                <td><span class="pct-badge">${fmtTasa(d.tasa)}</span></td>
+                <td><span class="nivel-badge ${claseNivel}">${d.nivelIcono} ${d.nivel}</span></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function mostrarError(msg) {
+        document.getElementById('alertaMsg').textContent = msg;
+        document.getElementById('alertaError').style.display = 'block';
+        document.getElementById('seccionDatos').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'none';
+    }
+
+    function limpiar() {
+        document.getElementById('selectAnio').value = 2024;
+        document.getElementById('alertaError').style.display = 'none';
+        document.getElementById('seccionDatos').style.display = 'none';
+        document.getElementById('estadoInicial').style.display = 'block';
+        document.getElementById('heatmapTooltip').style.display = 'none';
+        if (tasaChartBarInstance) { tasaChartBarInstance.destroy(); tasaChartBarInstance = null; }
+        if (tasaChartPieInstance) { tasaChartPieInstance.destroy(); tasaChartPieInstance = null; }
+        ocultarRespuestaIA();
+    }
+
+    // ===== Asistente IA =====
+    function preguntarChip(texto) {
+        document.getElementById('iaPregunta').value = texto;
+        preguntarIA();
+    }
+
+    function ocultarRespuestaIA() {
+        const el = document.getElementById('iaRespuesta');
+        el.classList.remove('visible');
+        el.textContent = '';
+    }
+
+    async function preguntarIA() {
+        const pregunta = document.getElementById('iaPregunta').value.trim();
+        const el = document.getElementById('iaRespuesta');
+        if (!pregunta) return;
+
+        el.classList.add('visible');
+        el.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Analizando...';
+
+        try {
+            const res = await fetch(`/Poblacion/ObtenerRespuestaIA?pregunta=${encodeURIComponent(pregunta)}&anio=${anioActual}`);
+            const data = await res.json();
+            el.innerHTML = data.error
+                ? `<i class="bi bi-exclamation-triangle me-1"></i>${data.error}`
+                : `<i class="bi bi-robot me-1"></i>${data.respuesta}`;
+        } catch (e) {
+            el.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>No se pudo consultar al asistente: ' + e.message;
+        }
+    }
+</script>
+}
